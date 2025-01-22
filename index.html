@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>USL's Even Sem Time Table</title>
+    <link rel="icon" type="image/png" href="usl-tt.webp">
     <style>
         * {
             margin: 0;
@@ -445,6 +446,14 @@
             font-weight: bold;
             color: #2e7d32;
         }
+
+        .time-remaining {
+            display: block;
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -594,15 +603,15 @@
             const time = hours * 60 + minutes;  // Convert to minutes for easier comparison
 
             const periods = [
-                { start: '07:10', end: '08:50', numbers: [1, 2] },
-                { start: '09:20', end: '11:00', numbers: [3, 4] },
-                { start: '11:10', end: '12:50', numbers: [5, 6] },
-                { start: '12:50', end: '13:50', numbers: [7], type: 'break', name: 'Lunch Break' },
-                { start: '13:50', end: '14:40', numbers: [8] },
-                { start: '14:50', end: '15:40', numbers: [9] },
-                { start: '15:50', end: '17:30', numbers: [10, 11] },
-                { start: '17:30', end: '18:15', numbers: [12], type: 'break', name: 'Snacks Break' },
-                { start: '18:15', end: '20:15', numbers: [13, 14] }
+                { start: '07:10', end: '08:50', numbers: [1, 2], time: '7:10 AM - 8:50 AM' },
+                { start: '09:20', end: '11:00', numbers: [3, 4], time: '9:20 AM - 11:00 AM' },
+                { start: '11:10', end: '12:50', numbers: [5, 6], time: '11:10 AM - 12:50 PM' },
+                { start: '12:50', end: '13:50', numbers: [7], type: 'break', name: 'Lunch Break', time: '12:50 PM - 1:50 PM' },
+                { start: '13:50', end: '14:40', numbers: [8], time: '1:50 PM - 2:40 PM' },
+                { start: '14:50', end: '15:40', numbers: [9], time: '2:50 PM - 3:40 PM' },
+                { start: '15:50', end: '17:30', numbers: [10, 11], time: '3:50 PM - 5:30 PM' },
+                { start: '17:30', end: '18:15', numbers: [12], type: 'break', name: 'Snacks Break', time: '5:30 PM - 6:15 PM' },
+                { start: '18:15', end: '20:15', numbers: [13, 14], time: '6:15 PM - 8:15 PM' }
             ];
 
             // Find current period
@@ -668,98 +677,112 @@
             const presentClassBox = document.getElementById('present-class');
             const nextClassBox = document.getElementById('next-class');
             
-            const currentDay = 'Tue';  // Hardcoded for testing with the given static time
+            // Get current day
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const now = new Date();
+            const currentDay = days[now.getDay()];
+            
             const periodInfo = getCurrentPeriod();
             
-            console.log('Current Period Info:', periodInfo);
-
             // Get the row for the current day
             const table = document.querySelector('table');
             const rows = Array.from(table.querySelectorAll('tr'));
             const dayRow = rows.find(row => row.querySelector('.time-slot')?.textContent.trim() === currentDay);
 
             if (!dayRow) {
-                presentClassBox.querySelector('.class-info').textContent = 'No classes today';
-                nextClassBox.querySelector('.class-info').textContent = 'No classes today';
+                presentClassBox.querySelector('.class-info').innerHTML = '<div class="subject-name">No classes today</div>';
+                nextClassBox.querySelector('.class-info').innerHTML = '<div class="subject-name">No classes today</div>';
                 return;
             }
 
             const cells = Array.from(dayRow.querySelectorAll('td'));
 
             function getClassType(classInfo) {
-                const match = classInfo.match(/\[([LTPS])\]/);
-                if (match) {
-                    return match[1]; // Return the letter inside brackets
-                }
-                // Fallback to checking text content if no brackets found
-                const classText = classInfo.toLowerCase();
-                if (classText.includes('lab') || classText.includes('session')) {
-                    return 'P';
-                } else if (classText.includes('tutorial')) {
-                    return 'T';
-                } else if (classText.includes('seminar')) {
-                    return 'S';
-                } else {
+                if (classInfo.includes('Lecture')) {
                     return 'L';
+                } else if (classInfo.includes('Tutorial')) {
+                    return 'T';
+                } else if (classInfo.includes('Practical')) {
+                    return 'P';
+                } else if (classInfo.includes('Session')) {
+                    return 'S';
                 }
+                return 'L'; // Default to Lecture if type cannot be determined
             }
 
-            function formatClassInfo(cell) {
-                if (!cell) return null;
+            function getTimeRemaining(endTime) {
+                const [endHour, endMin] = endTime.split(':').map(Number);
+                const now = new Date();
+                const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endHour, endMin);
+                const diff = end - now;
+                
+                if (diff <= 0) return '';
+                
+                const minutes = Math.floor(diff / 60000);
+                const hours = Math.floor(minutes / 60);
+                const remainingMinutes = minutes % 60;
+                
+                if (hours > 0) {
+                    return `(${hours}h ${remainingMinutes}m remaining)`;
+                }
+                return `(${remainingMinutes}m remaining)`;
+            }
+
+            function formatClassInfo(cell, period) {
+                if (!cell || cell.textContent.trim() === '-') return null;
                 
                 const text = cell.textContent.trim();
-                const roomInfo = text.match(/S-\d+-RoomNo-[^"]*/) || '';
-                const roomNumber = text.match(/RoomNo-"([^"]*)"/) ? text.match(/RoomNo-"([^"]*)"/) : '';
+                const parts = text.split('-');
+                const subjectName = parts[0].trim();
                 const classType = getClassType(text);
+                const roomInfo = cell.querySelector('.room-info')?.textContent || '';
                 
-                const subjectName = text.split('-')[0].trim();
-                const animatedSubjectName = Array.from(subjectName).map(
-                    (char, i) => `<span style="animation-delay: ${i * 0.1}s">${char}</span>`
-                ).join('');
+                const timeRemaining = period ? getTimeRemaining(period.end) : '';
                 
                 return `
-                    <div class="subject-name">${animatedSubjectName}</div>
-                    <div class="room-details">${roomNumber || roomInfo}</div>
-                    <div class="ltps-container">
-                        <span class="ltps-item">${classType}</span>
+                    <div class="class-info">
+                        <div class="subject-name">${subjectName}</div>
+                        <div class="room-details">${roomInfo}</div>
+                        <div class="ltps-container">
+                            <span class="ltps-item">${classType}</span>
+                        </div>
+                        <div class="period-time">
+                            ${period.time}
+                            <span class="time-remaining">${timeRemaining}</span>
+                        </div>
                     </div>
-                    <div class="period-time">${periodInfo.current.time || ''}</div>
                 `;
             }
 
-            function getClassInfo(period, isNext = false) {
-                if (!period) return 'No class scheduled';
-                if (period.type === 'break') return period.name;
-                
-                const classCell = cells[period.numbers[0]];
-                if (!classCell || classCell.textContent.trim() === '-') return 'No class scheduled';
-                
-                return formatClassInfo(classCell) || 'No class information';
-            }
-
-            // Update present class info
-            presentClassBox.querySelector('.class-info').innerHTML = periodInfo.current 
-                ? (getClassInfo(periodInfo.current) || 'No ongoing classes')
-                : 'No ongoing classes';
-
-            // Find and update next class
-            const nextClassCell = getNextClass(cells, periodInfo.current?.numbers);
-            nextClassBox.querySelector('.class-info').innerHTML = nextClassCell 
-                ? (formatClassInfo(nextClassCell) || 'No upcoming classes')
-                : 'No upcoming classes';
-
-            // Add period time information
+            // Update present class
             if (periodInfo.current) {
-                presentClassBox.querySelector('.class-info').innerHTML += `<div class="period-time">${periodInfo.current.time || ''}</div>`;
-            }
-            
-            // Add time for next class if available
-            if (periodInfo.next) {
-                nextClassBox.querySelector('.class-info').innerHTML += `<div class="period-time">${periodInfo.next.time || ''}</div>`;
+                const currentCell = periodInfo.current.numbers ? cells[periodInfo.current.numbers[0]] : null;
+                presentClassBox.querySelector('.class-info').innerHTML = 
+                    periodInfo.current.type === 'break' 
+                        ? `<div class="subject-name">${periodInfo.current.name}</div>
+                           <div class="period-time">
+                               ${periodInfo.current.time}
+                               <span class="time-remaining">${getTimeRemaining(periodInfo.current.end)}</span>
+                           </div>`
+                        : formatClassInfo(currentCell, periodInfo.current) || '<div class="subject-name">No ongoing classes</div>';
+            } else {
+                presentClassBox.querySelector('.class-info').innerHTML = '<div class="subject-name">No ongoing classes</div>';
             }
 
-            console.log('Present Class:', presentClassBox.querySelector('.class-info').innerHTML);
-            console.log('Next Class:', nextClassBox.querySelector('.class-info').innerHTML);
+            // Update next class
+            if (periodInfo.next) {
+                const nextCell = periodInfo.next.numbers ? cells[periodInfo.next.numbers[0]] : null;
+                nextClassBox.querySelector('.class-info').innerHTML = 
+                    periodInfo.next.type === 'break' 
+                        ? `<div class="subject-name">${periodInfo.next.name}</div>
+                           <div class="period-time">
+                               ${periodInfo.next.time}
+                               <span class="time-remaining">Starts in ${getTimeRemaining(periodInfo.next.start)}</span>
+                           </div>`
+                        : formatClassInfo(nextCell, periodInfo.next) || '<div class="subject-name">No upcoming classes</div>';
+            } else {
+                nextClassBox.querySelector('.class-info').innerHTML = '<div class="subject-name">No upcoming classes</div>';
+            }
         }
 
         // Function to get current day
@@ -842,7 +865,7 @@
             
             // Set intervals for periodic updates
             setInterval(updateDateTime, 1000);  // Update time every second
-            setInterval(updateClassBoxes, 60000);  // Update class boxes every minute
+            setInterval(updateClassBoxes, 10000);  // Update class boxes every 10 seconds
         };
     </script>
     <style>
